@@ -1,25 +1,17 @@
-# 
-# PERSONAL EXPENSE ANALYZER - Streamlit App
-# This is a simple tool to track, analyze, and manage personal expenses with budget tracking
-# 
-
-import datetime      # For handling dates and time
-import io            # For reading/writing file data in memory
-import sqlite3       # For local database storage
+import datetime
+import io
+import sqlite3
 from pathlib import Path
 
-import matplotlib.pyplot as plt  # For creating pie charts and visualizations
-import pandas as pd              # For handling tabular data (rows and columns)
-import streamlit as st           # Web app framework for creating the UI
+import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
+from pathlib import Path
 
-# This also Set up the database file location (in the same folder as this app)
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "expenses.db"
 
-# This Configure the Streamlit page (title, layout style, etc.)
 st.set_page_config(page_title="Personal Expense Analyzer", layout="wide")
-
-# This Display the main title and description
 st.title("Personal Expense Analyzer")
 st.write("Track your expenses manually, monitor savings progress, and keep data stored locally.")
 
@@ -27,9 +19,9 @@ st.write("Track your expenses manually, monitor savings progress, and keep data 
 def safe_rerun():
     """Safely refresh the app after making changes. Clears cached data and reruns the script."""
     if hasattr(st, "experimental_rerun"):
-        st.cache_data.clear()              # Clear cached expense data
-        st.session_state.data_modified = True  # Mark data as changed
-        st.experimental_rerun()            # Rerun the app with fresh data
+        st.cache_data.clear()
+        st.session_state.data_modified = True
+        st.experimental_rerun()
     else:
         try:
             st.cache_data.clear()
@@ -45,17 +37,16 @@ def format_money(amount):
     return f"₦{amount:,.2f}"
 
 
-@st.cache_resource  # Cache this connection to avoid creating multiple database connections
+@st.cache_resource
 def get_db_connection():
     """Connect to the SQLite database. The @cache_resource decorator ensures only one connection is created."""
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)  # Allow use across threads
-    conn.row_factory = sqlite3.Row  # Access rows like dictionaries
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db(conn):
     """Create database tables if they don't exist. Sets up the database structure on first run."""
-    # Table 1: Store each expense with date, category, and amount
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS expenses (
@@ -66,7 +57,6 @@ def init_db(conn):
         )
         """
     )
-    # Table 2: This would Store favorite categories (e.g., "Groceries", "Transport", "Entertainment")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS category_presets (
@@ -74,7 +64,6 @@ def init_db(conn):
         )
         """
     )
-    # Table 3: Store monthly budget targets (spending goals for each month)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS budget_targets (
@@ -84,7 +73,6 @@ def init_db(conn):
         )
         """
     )
-    # Table 4: Store spending targets for specific categories (e.g., "Groceries: ₦20,000")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS category_targets (
@@ -93,7 +81,7 @@ def init_db(conn):
         )
         """
     )
-    conn.commit()  # Save all table creations to the database
+    conn.commit()
 
 
 def load_category_presets(conn):
@@ -120,7 +108,7 @@ def load_expenses(conn):
     return [dict(row) for row in rows]
 
 
-@st.cache_data(ttl=300)  # Cache this for 5 minutes to improve performance
+@st.cache_data(ttl=300)
 def get_expenses_dataframe():
     """Load expenses from database and convert to a pandas DataFrame.
     
@@ -131,11 +119,9 @@ def get_expenses_dataframe():
     raw_expenses = load_expenses(conn)
     if raw_expenses:
         df = pd.DataFrame(raw_expenses)
-        # Rename columns to proper case for display
         df = df.rename(columns={"date": "Date", "category": "Category", "amount": "Amount"})
-        df["Date"] = pd.to_datetime(df["Date"]).dt.date  # Convert to date type
+        df["Date"] = pd.to_datetime(df["Date"]).dt.date
         return df
-    # Return empty dataframe with correct structure if no expenses yet
     return pd.DataFrame(columns=["id", "Date", "Category", "Amount"])
 
 
@@ -183,7 +169,7 @@ def load_budget_history(conn):
 def load_budget_target(conn, month):
     """Get the spending target for a specific month (e.g., "2026-05")."""
     row = conn.execute("SELECT amount FROM budget_targets WHERE month = ?", (month,)).fetchone()
-    return float(row["amount"]) if row else 0.0  # Return 0 if no budget set for this month
+    return float(row["amount"]) if row else 0.0
 
 
 def save_budget_target(conn, month, amount):
@@ -236,15 +222,14 @@ def get_rollover_summary(conn):
     """
     budget_rows = load_budget_history(conn)
     monthly_spending = load_monthly_spending(conn)
-    # Get all months that have either a budget or expenses
     months = sorted(set([row["month"] for row in budget_rows] + list(monthly_spending.keys())))
-    rollover = 0.0  # Running total of accumulated savings
+    rollover = 0.0
     summary = []
     for month in months:
         target = load_budget_target(conn, month)
         spent = monthly_spending.get(month, 0.0)
-        remainder = round(target - spent, 2)  # Positive = under budget, Negative = over budget
-        rollover += remainder  # Add to cumulative savings
+        remainder = round(target - spent, 2)
+        rollover += remainder
         summary.append(
             {
                 "Month": month,
@@ -263,46 +248,28 @@ def get_total_savings(conn):
     return summary[-1]["Rollover Balance"] if summary else 0.0
 
 
-# 
-# Initialize Database and Load Data
-# 
+conn = get_db_connection()
+init_db(conn)
 
-conn = get_db_connection()  # Get or create database connection
-init_db(conn)              # Create tables if they don't exist
-
-# This is to Load category presets (favorite categories)
 category_presets = load_category_presets(conn)
 if not category_presets:
-    # Add default categories on first run
     default_presets = ["Groceries", "Bills", "Transport", "Dining", "Entertainment", "Healthcare"]
     for preset in default_presets:
         add_category_preset(conn, preset)
     category_presets = default_presets
 
-# Load all data needed for the app
-df = get_expenses_dataframe()  # Load expenses dataframe (cached for 5 minutes)
-budget_history = load_budget_history(conn)  # Load monthly budgets
-category_targets = load_category_targets(conn)  # Load category spending limits
-monthly_rollover = get_rollover_summary(conn)  # Calculate budget rollover/savings
+df = get_expenses_dataframe()
+budget_history = load_budget_history(conn)
+category_targets = load_category_targets(conn)
+monthly_rollover = get_rollover_summary(conn)
 
-# Initialize session state variables (these persist while the user has the app open)
 if "budget_month" not in st.session_state:
-    st.session_state.budget_month = get_month_string(datetime.date.today())  # Default to current month
+    st.session_state.budget_month = get_month_string(datetime.date.today())
 
 if "data_modified" not in st.session_state:
-    st.session_state.data_modified = False  # Flag to track if data has been changed
-
-
-# 
-# Create Tabs for Navigation
-# 
-# The app has 3 main sections: Dashboard (overview), Expenses (add/view/edit), Settings (budgets/presets)
+    st.session_state.data_modified = False
 
 dashboard_tab, expenses_tab, settings_tab = st.tabs(["Dashboard", "Expenses", "Settings"])
-
-# 
-# DASHBOARD TAB - Shows key metrics and savings summary
-#
 with dashboard_tab:
     st.subheader("Dashboard")
     total_spent = float(df["Amount"].sum()) if not df.empty else 0.0
@@ -339,12 +306,8 @@ with dashboard_tab:
         st.subheader("Saved Category Targets")
         st.dataframe(pd.DataFrame(category_targets))
 
-# 
-# EXPENSES TAB - Add, view, edit, import, and analyze expenses
-# 
 with expenses_tab:
     st.subheader("Expense Entry")
-    # Simple form to quickly add a single expense
     with st.form(key="expense_form_tab"):
         date = st.date_input("Date", value=datetime.date.today())
         category_choice = st.selectbox("Category", category_presets + ["Other"])
@@ -367,11 +330,9 @@ with expenses_tab:
                 safe_rerun()
     st.markdown("---")
     st.subheader("Import / Export")
-    # Two columns: left for importing, right for exporting
     col1, col2 = st.columns(2)
     with col1:
         st.caption("Upload a CSV or Excel file with columns: Date, Category, Amount.")
-        # This allows user to upload a file with multiple expenses to add at once
         uploaded_file = st.file_uploader("Import expenses from CSV or Excel", type=["csv", "xls", "xlsx"], key="import_csv")
         if uploaded_file is not None:
             try:
@@ -393,7 +354,6 @@ with expenses_tab:
                     imported_df["Date"] = pd.to_datetime(imported_df["Date"]).dt.date
                     imported_df["Category"] = imported_df["Category"].astype(str).str.title()
                     imported_df["Amount"] = imported_df["Amount"].astype(float)
-                    
                     progress_placeholder = st.empty()
                     progress_placeholder.text("Importing expenses...")
                     progress_bar = st.progress(0)
@@ -521,23 +481,16 @@ with expenses_tab:
 
             st.subheader("Category Spend Pie Chart")
             fig, ax = plt.subplots(figsize=(14, 8))
-            
-            # Professional color palette for categories
             color_palette = [
                 "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
                 "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B88B", "#A9DFBF",
                 "#F5B7B1", "#D7BDE2", "#FAD7A0", "#A3E4D7", "#F9E79F",
             ]
-            
-            # Map categories to consistent colors
             categories = spending_by_category["Category"].tolist()
             category_colors = {}
             for i, cat in enumerate(categories):
                 category_colors[cat] = color_palette[i % len(color_palette)]
-            
             colors = [category_colors[cat] for cat in categories]
-            
-            # This would Create pie chart with only percentages on slices
             wedges, texts, autotexts = ax.pie(
                 spending_by_category["Amount"],
                 labels=None,
@@ -548,14 +501,10 @@ with expenses_tab:
                 pctdistance=0.82,
                 explode=[0.05] * len(spending_by_category),
             )
-            
-            # This would Style percentage text
             for autotext in autotexts:
                 autotext.set_color("white")
                 autotext.set_weight("bold")
                 autotext.set_fontsize(11)
-            
-            # Create legend with amounts
             legend_labels = [
                 f"{cat}: {format_money(amt)}"
                 for cat, amt in zip(
@@ -640,12 +589,8 @@ with expenses_tab:
     else:
         st.info("No expenses available yet. Add a few entries first.")
 
-# 
-# SETTINGS TAB - Manage category presets and budget targets
-#
 with settings_tab:
     st.subheader("Settings")
-    # Section 1: Manage favorite categories
     with st.expander("Category presets", expanded=True):
         new_preset = st.text_input("Add a preset category", "", key="settings_new_preset")
         if st.button("Add preset", key="settings_add_preset"):
@@ -672,8 +617,6 @@ with settings_tab:
             st.info("No presets yet. Add one above.")
 
     st.markdown("---")
-
-    # Section 2: Set monthly spending budgets
     with st.expander("Monthly budget targets", expanded=True):
         budget_month_date = st.date_input(
             "Select budget month",
@@ -703,8 +646,6 @@ with settings_tab:
             st.info("No budget history yet. Save a budget to begin tracking.")
 
     st.markdown("---")
-
-    # Section 3: Set spending limits for specific categories
     with st.expander("Category budget targets", expanded=True):
         category_options = sorted(set(category_presets + df["Category"].dropna().astype(str).tolist()))
         if category_options:
@@ -732,4 +673,3 @@ with settings_tab:
                     safe_rerun()
         else:
             st.info("Add expenses or presets to set category targets.")
-# Enjoy the app and happy budgeting Big Sis! :)
