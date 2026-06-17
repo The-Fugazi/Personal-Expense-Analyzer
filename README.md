@@ -4,26 +4,26 @@ A professional Streamlit web application for tracking personal expenses, managin
 
 ## Features
 
-### 💰 Expense & Income Tracking
+###  Expense & Income Tracking
 - Record expenses by category with date, amount, and description
 - Track income from multiple sources (Salary, Freelance, Business, etc.)
 - CSV and Excel import/export functionality
 - Edit and delete transactions
 
-### 📊 Dashboard & Analytics
+###  Dashboard & Analytics
 - **Key Metrics**: Total income, total spending, net savings, transaction count
 - **Cash Flow Analysis**: Side-by-side monthly income vs expense chart
 - **Spending Analytics**: Monthly trends, category breakdown (bar and pie charts)
 - **Category Insights**: Top spending categories with visualizations
 - **Recent Transactions**: View and manage all transactions
 
-### 💳 Budget Management
+###  Budget Management
 - Set monthly spending targets
 - Track category-specific spending limits
 - Budget vs actual comparison
 - Monthly budget history
 
-### 🎯 Smart Features
+###  Smart Features
 - Category presets for quick expense entry
 - Professional gradient UI with responsive design
 - Multi-user support with secure authentication
